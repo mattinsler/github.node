@@ -1,74 +1,239 @@
 (function() {
-  var Github, Rest,
+  var Api, AuthorizationsApi, ContributorsApi, Github, HookApi, HooksApi, RepoApi, ReposApi, Rest, UserApi, fs,
     __hasProp = {}.hasOwnProperty,
     __extends = function(child, parent) { for (var key in parent) { if (__hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; };
 
+  fs = require('fs');
+
   Rest = require('rest.node');
+
+  Api = {
+    User: UserApi = (function() {
+
+      function UserApi(client) {
+        this.client = client;
+      }
+
+      UserApi.prototype.get = function(cb) {
+        return this.client.get('/user', cb);
+      };
+
+      return UserApi;
+
+    })(),
+    Repos: ReposApi = (function() {
+
+      function ReposApi(client) {
+        this.client = client;
+      }
+
+      ReposApi.prototype.list = function(opts, cb) {
+        return this.client.get('/user/repos', opts, cb);
+      };
+
+      ReposApi.prototype.create = function(data, cb) {
+        return this.client.post('/user/repos', data, cb);
+      };
+
+      return ReposApi;
+
+    })(),
+    Repo: RepoApi = (function() {
+
+      function RepoApi(client, repo) {
+        this.client = client;
+        this.repo = repo;
+        this.contributors = new Api.Contributors(this.client, this.repo);
+        this.hooks = new Api.Hooks(this.client, this.repo);
+      }
+
+      RepoApi.prototype.get = function(cb) {
+        return this.client.get("/repos/" + this.repo, cb);
+      };
+
+      RepoApi.prototype.update = function(updates, cb) {
+        return this.client.put("/repos/" + this.repo, updates, cb);
+      };
+
+      RepoApi.prototype.download_archive = function(archive_format, output_file, cb) {
+        var _this = this;
+        return fs.exists(output_file, function(exists) {
+          var on_error, opts, out;
+          if (exists) {
+            return cb(new Error('output_file ' + output_file + ' already exists'));
+          }
+          try {
+            out = fs.createWriteStream(output_file);
+          } catch (err) {
+            return typeof cb === "function" ? cb(err) : void 0;
+          }
+          on_error = function(err) {
+            out.destroy();
+            fs.unlinkSync(output_file);
+            return typeof cb === "function" ? cb(err) : void 0;
+          };
+          opts = _this.client.create_request_opts('get', "/repos/" + _this.repo + "/" + archive_format, {}, {
+            followRedirect: false
+          });
+          out.once('error', on_error);
+          out.once('close', function() {
+            return typeof cb === "function" ? cb(null, output_file) : void 0;
+          });
+          return _this.client.get("/repos/" + _this.repo + "/" + archive_format, function(err) {
+            if (err.status_code !== 302) {
+              return on_error(err);
+            }
+            return Rest.request.get(err.headers.location).pipe(out);
+          }, {
+            followRedirect: false
+          });
+        });
+      };
+
+      RepoApi.prototype.hook = function(id) {
+        return new Api.Hook(this.client, this.repo, id);
+      };
+
+      return RepoApi;
+
+    })(),
+    Contributors: ContributorsApi = (function() {
+
+      function ContributorsApi(client, repo) {
+        this.client = client;
+        this.repo = repo;
+      }
+
+      ContributorsApi.prototype.list = function(opts, cb) {
+        return this.client.get("/repos/" + this.repo + "/contributors", opts, cb);
+      };
+
+      return ContributorsApi;
+
+    })(),
+    Hooks: HooksApi = (function() {
+
+      function HooksApi(client, repo) {
+        this.client = client;
+        this.repo = repo;
+      }
+
+      HooksApi.prototype.list = function(cb) {
+        return this.client.get("/repos/" + this.repo + "/hooks", cb);
+      };
+
+      HooksApi.prototype.create = function(data, cb) {
+        return this.client.post("/repos/" + this.repo + "/hooks", data, cb);
+      };
+
+      return HooksApi;
+
+    })(),
+    Hook: HookApi = (function() {
+
+      function HookApi(client, repo, id) {
+        this.client = client;
+        this.repo = repo;
+        this.id = id;
+      }
+
+      HookApi.prototype.get = function(cb) {
+        return this.client.get("/repos/" + this.repo + "/hooks/" + this.id, cb);
+      };
+
+      HookApi.prototype.update = function(updates, cb) {
+        return this.client.put("/repos/" + this.repo + "/hooks/" + this.id, updates, cb);
+      };
+
+      HookApi.prototype.remove = function(cb) {
+        return this.client["delete"]("/repos/" + this.repo + "/hooks/" + this.id, cb);
+      };
+
+      HookApi.prototype.test = function(cb) {
+        return this.client.post("/repos/" + this.repo + "/hooks/" + this.id + "/tests", cb);
+      };
+
+      return HookApi;
+
+    })(),
+    Authorizations: AuthorizationsApi = (function() {
+
+      function AuthorizationsApi(client) {
+        this.client = client;
+      }
+
+      AuthorizationsApi.prototype.list = function(cb) {
+        return this.client.get('/authorizations', cb);
+      };
+
+      AuthorizationsApi.prototype.create = function(data, cb) {
+        return this.client.post('/authorizations', data, cb);
+      };
+
+      return AuthorizationsApi;
+
+    })()
+  };
 
   Github = (function(_super) {
 
     __extends(Github, _super);
 
     Github.hooks = {
-      access_token: function(access_token) {
-        return function(request_opts, opts, callback, next) {
+      user_agent: function(request_opts, opts) {
+        var _ref;
+        if ((_ref = request_opts.headers) == null) {
+          request_opts.headers = {};
+        }
+        return request_opts.headers['User-Agent'] = 'github.node';
+      },
+      basic_auth: function(user, pass) {
+        return function(request_opts, opts) {
           var _ref;
           if ((_ref = request_opts.headers) == null) {
             request_opts.headers = {};
           }
-          request_opts.headers.Authorization = 'token ' + access_token;
-          return next();
+          return request_opts.headers.Authorization = 'Basic ' + new Buffer("" + user + ":" + pass).toString('base64');
         };
       },
-      get: function(request_opts, opts, callback, next) {
-        request_opts.qs = opts;
-        return next();
+      access_token: function(access_token) {
+        return function(request_opts, opts) {
+          var _ref;
+          if ((_ref = request_opts.headers) == null) {
+            request_opts.headers = {};
+          }
+          return request_opts.headers.Authorization = 'token ' + access_token;
+        };
+      },
+      get: function(request_opts, opts) {
+        return request_opts.qs = opts;
+      },
+      post: function(request_opts, opts) {
+        return request_opts.json = opts;
       }
     };
 
     function Github(options) {
-      var _this = this;
       this.options = options != null ? options : {};
       Github.__super__.constructor.call(this, {
         base_url: 'https://api.github.com'
       });
+      this.hook('pre:request', Github.hooks.user_agent);
+      if ((this.options.username != null) && (this.options.password != null)) {
+        this.hook('pre:request', Github.hooks.basic_auth(this.options.username, this.options.password));
+      }
       if (this.options.access_token != null) {
         this.hook('pre:request', Github.hooks.access_token(this.options.access_token));
       }
       this.hook('pre:get', Github.hooks.get);
-      this.user = {
-        repositories: {
-          list: function(opts, callback) {
-            return _this.get('/user/repos', opts, callback);
-          }
-        }
-      };
+      this.hook('pre:post', Github.hooks.post);
+      this.repos = new Api.Repos(this);
+      this.user = new Api.User(this);
+      this.authorizations = new Api.Authorizations(this);
     }
 
-    Github.prototype.users = function(user) {
-      var repos,
-        _this = this;
-      repos = function(repo) {
-        return {
-          hooks: {
-            list: function(opts, callback) {
-              return _this.get("/repos/" + user + "/" + repo + "/hooks", opts, callback);
-            },
-            get: function(id, opts, callback) {
-              return _this.get("/repos/" + user + "/" + repo + "/hooks/" + id, opts, callback);
-            },
-            create: function(opts, callback) {
-              return _this.post("/repos/" + user + "/" + repo + "/hooks", opts, callback);
-            }
-          }
-        };
-      };
-      repos.list = function(opts, callback) {
-        return _this.get('/users/' + user + '/repos', opts, callback);
-      };
-      return {
-        repositories: repos
-      };
+    Github.prototype.repo = function(repo) {
+      return new Api.Repo(this, repo);
     };
 
     return Github;

@@ -1,7 +1,7 @@
 {
   "name": "github.node",
   "description": "Github v3 API client",
-  "version": "0.1.0",
+  "version": "0.0.1",
   "homepage": "https://github.com/mattinsler/github.node",
   "author": {
     "name": "Matt Insler",
@@ -26,7 +26,7 @@
     "node": ">= 0.6.0"
   },
   "dependencies": {
-    "rest.node": "0.3.x"
+    "rest.node": "0.4.x"
   },
   "devDependencies": {
     "grunt": "~0.3.15",
