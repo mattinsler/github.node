@@ -3,17 +3,18 @@ Rest = require 'rest.node'
 
 Api = {
   User: class UserApi
-    constructor: (@client) ->
-    get: (cb) -> @client.get('/user', cb)
+    constructor: (@client, @user) ->
+      @repos = new Api.Repos(@client, @user)
+    get: (cb) -> @client.get("/user/#{@user}", cb)
   
   Repos: class ReposApi
-    constructor: (@client) ->
-    list: (opts, cb) -> @client.get('/user/repos', opts, cb)
-    create: (data, cb) -> @client.post('/user/repos', data, cb)
+    constructor: (@client, @user) ->
+    list: (opts, cb) -> @client.get("/user#{if @user? then 's/' + @user else ''}/repos", opts, cb)
+    create: (data, cb) -> @client.post("/user#{if @user? then 's/' + @user else ''}/repos", data, cb)
   
   Repo: class RepoApi
     constructor: (@client, @repo) ->
-      @contributors = new Api.Contributors(@client, @repo)
+      @collaborators = new Api.Collaborators(@client, @repo)
       @hooks = new Api.Hooks(@client, @repo)
     
     get: (cb) -> @client.get("/repos/#{@repo}", cb)
@@ -44,9 +45,9 @@ Api = {
     
     hook: (id) -> new Api.Hook(@client, @repo, id)
   
-  Contributors: class ContributorsApi
+  Collaborators: class CollaboratorsApi
     constructor: (@client, @repo) ->
-    list: (opts, cb) -> @client.get("/repos/#{@repo}/contributors", opts, cb)
+    list: (opts, cb) -> @client.get("/repos/#{@repo}/collaborators", opts, cb)
   
   Hooks: class HooksApi
     constructor: (@client, @repo) ->
@@ -98,9 +99,9 @@ class Github extends Rest
     @hook('pre:post', Github.hooks.post)
     
     @repos = new Api.Repos(@)
-    @user = new Api.User(@)
     @authorizations = new Api.Authorizations(@)
   
+  user: (user) -> new Api.User(@, user)
   repo: (repo) -> new Api.Repo(@, repo)
 
 module.exports = Github
