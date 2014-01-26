@@ -1,5 +1,5 @@
 (function() {
-  var Api, AuthorizationsApi, CollaboratorsApi, Github, HookApi, HooksApi, RepoApi, ReposApi, Rest, UserApi, fs,
+  var Api, AuthorizationsApi, BranchesApi, CollaboratorsApi, Github, HookApi, HooksApi, OrgApi, OrgReposApi, OrgsApi, RepoApi, ReposApi, Rest, UserApi, fs,
     __hasProp = {}.hasOwnProperty,
     __extends = function(child, parent) { for (var key in parent) { if (__hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; };
 
@@ -12,6 +12,7 @@
       function UserApi(client, user) {
         this.client = client;
         this.user = user;
+        this.orgs = new Api.Orgs(this.client, this.user);
         this.repos = new Api.Repos(this.client, this.user);
       }
 
@@ -20,6 +21,59 @@
       };
 
       return UserApi;
+
+    })(),
+    Branches: BranchesApi = (function() {
+      function BranchesApi(client, repo) {
+        this.client = client;
+        this.repo = repo;
+      }
+
+      BranchesApi.prototype.list = function(cb) {
+        return this.client.get("/repos/" + this.repo + "/branches", cb);
+      };
+
+      return BranchesApi;
+
+    })(),
+    Org: OrgApi = (function() {
+      function OrgApi(client, org) {
+        this.client = client;
+        this.org = org;
+        this.repos = new Api.OrgRepos(this.client);
+      }
+
+      return OrgApi;
+
+    })(),
+    OrgRepos: OrgReposApi = (function() {
+      function OrgReposApi(client, org) {
+        this.client = client;
+        this.org = org;
+      }
+
+      OrgReposApi.prototype.list = function(opts, cb) {
+        return this.client.get("/orgs/" + this.org + "/repos", opts, cb);
+      };
+
+      return OrgReposApi;
+
+    })(),
+    Orgs: OrgsApi = (function() {
+      function OrgsApi(client, user) {
+        this.client = client;
+        this.user = user;
+      }
+
+      OrgsApi.prototype.list = function(opts, cb) {
+        return this.client.get("/user" + (this.user != null ? 's/' + this.user : '') + "/orgs", opts, cb);
+      };
+
+      OrgsApi.prototype.create = function(data, cb) {
+        return this.client.post("/user" + (this.user != null ? 's/' + this.user : '') + "/orgs", data, cb);
+      };
+
+      return OrgsApi;
 
     })(),
     Repos: ReposApi = (function() {
@@ -45,6 +99,7 @@
         this.repo = repo;
         this.collaborators = new Api.Collaborators(this.client, this.repo);
         this.hooks = new Api.Hooks(this.client, this.repo);
+        this.branches = new Api.Branches(this.client, this.repo);
       }
 
       RepoApi.prototype.get = function(cb) {
@@ -220,16 +275,21 @@
       }
       this.hook('pre:get', Github.hooks.get);
       this.hook('pre:post', Github.hooks.post);
+      this.orgs = new Api.Orgs(this);
       this.repos = new Api.Repos(this);
       this.authorizations = new Api.Authorizations(this);
     }
 
-    Github.prototype.user = function(user) {
-      return new Api.User(this, user);
+    Github.prototype.org = function(org) {
+      return new Api.Org(this, org);
     };
 
     Github.prototype.repo = function(repo) {
       return new Api.Repo(this, repo);
+    };
+
+    Github.prototype.user = function(user) {
+      return new Api.User(this, user);
     };
 
     return Github;

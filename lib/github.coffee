@@ -4,8 +4,26 @@ Rest = require 'rest.node'
 Api = {
   User: class UserApi
     constructor: (@client, @user) ->
+      @orgs = new Api.Orgs(@client, @user)
       @repos = new Api.Repos(@client, @user)
     get: (cb) -> @client.get("/user/#{@user}", cb)
+  
+  Branches: class BranchesApi
+    constructor: (@client, @repo) ->
+    list: (cb) -> @client.get("/repos/#{@repo}/branches", cb)
+  
+  Org: class OrgApi
+    constructor: (@client, @org) ->
+      @repos = new Api.OrgRepos(@client)
+  
+  OrgRepos: class OrgReposApi
+    constructor: (@client, @org) ->
+    list: (opts, cb) -> @client.get("/orgs/#{@org}/repos", opts, cb)
+  
+  Orgs: class OrgsApi
+    constructor: (@client, @user) ->
+    list: (opts, cb) -> @client.get("/user#{if @user? then 's/' + @user else ''}/orgs", opts, cb)
+    create: (data, cb) -> @client.post("/user#{if @user? then 's/' + @user else ''}/orgs", data, cb)
   
   Repos: class ReposApi
     constructor: (@client, @user) ->
@@ -16,6 +34,7 @@ Api = {
     constructor: (@client, @repo) ->
       @collaborators = new Api.Collaborators(@client, @repo)
       @hooks = new Api.Hooks(@client, @repo)
+      @branches = new Api.Branches(@client, @repo)
     
     get: (cb) -> @client.get("/repos/#{@repo}", cb)
     update: (updates, cb) -> @client.put("/repos/#{@repo}", updates, cb)
@@ -98,10 +117,12 @@ class Github extends Rest
     @hook('pre:get', Github.hooks.get)
     @hook('pre:post', Github.hooks.post)
     
+    @orgs = new Api.Orgs(@)
     @repos = new Api.Repos(@)
     @authorizations = new Api.Authorizations(@)
   
-  user: (user) -> new Api.User(@, user)
+  org: (org) -> new Api.Org(@, org)
   repo: (repo) -> new Api.Repo(@, repo)
+  user: (user) -> new Api.User(@, user)
 
 module.exports = Github
